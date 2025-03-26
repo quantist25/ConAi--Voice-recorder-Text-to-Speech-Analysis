@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Recorder & Text-to-Speech with Sentiment Analysis</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: auto;
+        }
+        .main-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 30px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+        .container {
+            flex: 1;
+            border: 1px solid #e0e0e0;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            background-color: #fff;
+            min-width: 300px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            font-size: 1.3rem;
+            margin-top: 0;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 10px;
+            font-weight: 500;
+        }
+        .controls {
+            margin-top: 15px;
+            display: flex;
+            align-items: center;
+        }
+        button {
+            padding: 8px 14px;
+            border: 1px solid #000;
+            background-color: #fff;
+            cursor: pointer;
+            margin-right: 10px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background-color: #f9f9f9;
+        }
+        button:disabled {
+            border-color: #ccc;
+            cursor: not-allowed;
+        }
+        #timer {
+            font-family: monospace;
+            margin-left: 10px;
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #000;
+            margin-top: 15px;
+            resize: vertical;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+        form button {
+            align-self: flex-start;
+            margin-top: 15px;
+        }
+        .audio-container {
+            margin-top: 20px;
+        }
+        #transcription {
+            margin-top: 15px;
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            min-height: 60px;
+        }
+        .recording-title {
+            width: 100%;
+            padding: 8px;
+            margin-top: 15px;
+            border: 1px solid #000;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+        .file-list {
+            margin-top: 20px;
+        }
+        .file-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .file-item a {
+            color: #0066cc;
+            text-decoration: none;
+            margin-right: 10px;
+        }
+        .file-item a:hover {
+            text-decoration: underline;
+        }
+        .section-header {
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-weight: 500;
+            color: #555;
+        }
+        .status-message {
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #e6ffe6;
+            border: 1px solid #b3ffb3;
+            color: #006600;
+        }
+        .error {
+            background-color: #ffe6e6;
+            border: 1px solid #ffb3b3;
+            color: #990000;
+        }
+        .sentiment-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-left: 5px;
+        }
+        .sentiment-positive {
+            background-color: #e6ffe6;
+            border: 1px solid #b3ffb3;
+            color: #006600;
+        }
+        .sentiment-negative {
+            background-color: #ffe6e6;
+            border: 1px solid #ffb3b3;
+            color: #990000;
+        }
+        .sentiment-neutral {
+            background-color: #f0f0f0;
+            border: 1px solid #d0d0d0;
+            color: #555555;
+        }
+        .sentiment-result {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="container">
+            <h1>Record Your Voice</h1>
+            <div class="controls">
+                <button id="record">Start Recording</button>
+                <button id="stop" disabled>Stop</button>
+                <span id="timer">00:00</span>
+            </div>
+            <div class="audio-container">
+                <h3>Recorded Audio:</h3>
+                <audio id="audio" controls></audio>
+            </div>
+            <div id="uploadForm">
+                <input type="hidden" id="audioData" name="audio_data">
+            </div>
+        </div>
+        
+        <div class="container">
+            <h1>Convert Text to Speech</h1>
+            <form id="tts-form" action="/upload_text" method="POST">
+                <textarea name="text" id="tts-text" rows="5" placeholder="Type something..."></textarea>
+                <button type="submit">Generate Audio</button>
+            </form>
+            <div id="tts-status" class="status-message"></div>
+            <div class="audio-container">
+                <h3>Generated Speech:</h3>
+                <audio id="tts-audio" controls></audio>
+            </div>
+        </div>
+
+        <div class="container">
+            <h1>Files</h1>
+            
+            <!-- Speech-to-Text Recordings -->
+            <div class="section-header">Speech-to-Text Recordings:</div>
+            <div class="file-list">
+                {% if files %}
+                    {% for file in files %}
+                        {% if file.endswith('.wav') %}
+                            <div class="file-item">
+                                <div>{{ file }}</div>
+                                <div>
+                                    <a href="{{ url_for('uploaded_file', filename=file) }}">Listen</a>
+                                    {% set text_file = file.replace('.wav', '.txt') %}
+                                    {% if text_file in files %}
+                                        <a href="{{ url_for('uploaded_file', filename=text_file) }}">View Transcript</a>
+                                    {% endif %}
+                                    {% set sentiment_file = file.replace('.wav', '-sentiment.txt') %}
+                                    {% if sentiment_file in files %}
+                                        {% if file_sentiments and sentiment_file in file_sentiments %}
+                                            {% set sentiment = file_sentiments[sentiment_file] %}
+                                            {% if sentiment == 'Positive' %}
+                                                <span class="sentiment-badge sentiment-positive">Positive</span>
+                                            {% elif sentiment == 'Negative' %}
+                                                <span class="sentiment-badge sentiment-negative">Negative</span>
+                                            {% else %}
+                                                <span class="sentiment-badge sentiment-neutral">Neutral</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <p>No recordings yet.</p>
+                {% endif %}
+            </div>
+            
+            <!-- Text-to-Speech Recordings -->
+            <div class="section-header">Text-to-Speech Recordings:</div>
+            <div class="file-list">
+                {% if tts_files %}
+                    {% for file in tts_files %}
+                        {% if file.endswith('.wav') %}
+                            <div class="file-item">
+                                <div>{{ file }}</div>
+                                <div>
+                                    <a href="{{ url_for('generated_audio', filename=file) }}">Listen</a>
+                                    {% set text_file = file.replace('.wav', '.txt') %}
+                                    {% if text_file in tts_files %}
+                                        <a href="{{ url_for('generated_audio', filename=text_file) }}">View Script</a>
+                                    {% endif %}
+                                    {% set sentiment_file = file.replace('.wav', '-sentiment.txt') %}
+                                    {% if sentiment_file in tts_files %}
+                                        {% if tts_sentiments and sentiment_file in tts_sentiments %}
+                                            {% set sentiment = tts_sentiments[sentiment_file] %}
+                                            {% if sentiment == 'Positive' %}
+                                                <span class="sentiment-badge sentiment-positive">Positive</span>
+                                            {% elif sentiment == 'Negative' %}
+                                                <span class="sentiment-badge sentiment-negative">Negative</span>
+                                            {% else %}
+                                                <span class="sentiment-badge sentiment-neutral">Neutral</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <p>No text-to-speech files yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('scripts_js') }}"></script>
+</body>
+</html>
